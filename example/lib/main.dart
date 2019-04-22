@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import 'package:localstorage/localstorage.dart';
 
 void main() => runApp(new MyApp());
@@ -86,66 +85,110 @@ class _MyHomePageState extends State<HomePage> {
       appBar: new AppBar(
         title: new Text('Localstorage demo'),
       ),
-      body: Container(
-          padding: EdgeInsets.all(10.0),
-          constraints: BoxConstraints.expand(),
-          child: FutureBuilder(
-            future: storage.ready,
-            builder: (BuildContext context, AsyncSnapshot snapshot) {
-              if (snapshot.data == null) {
-                return Center(
-                  child: CircularProgressIndicator(),
-                );
-              }
-
-              if (!initialized) {
-                var items = storage.getItem('todos');
-
-                if (items != null) {
-                  (items as List).forEach((item) {
-                    final todoItem =
-                        new TodoItem(title: item['title'], done: item['done']);
-                    list.items.add(todoItem);
-                  });
+      body: Column(
+        children: <Widget>[
+          Flexible(
+            child: FutureBuilder(
+              future: storage.ready,
+              builder: (BuildContext context, AsyncSnapshot snapshot) {
+                if (snapshot.data == null) {
+                  return Center(
+                    child: CircularProgressIndicator(),
+                  );
                 }
 
-                initialized = true;
-              }
+                if (!initialized) {
+                  var items = storage.getItem('todos');
 
-              List<Widget> widgets = list.items.map((item) {
-                return CheckboxListTile(
-                  value: item.done,
-                  title: Text(item.title),
-                  selected: item.done,
-                  onChanged: (bool selected) {
-                    _toggleItem(item);
-                  },
+                  if (items != null) {
+                    (items as List).forEach((item) {
+                      final todoItem = new TodoItem(
+                          title: item['title'], done: item['done']);
+                      list.items.add(todoItem);
+                    });
+                  }
+
+                  initialized = true;
+                }
+
+                List<Widget> widgets = list.items.map((item) {
+                  return CheckboxListTile(
+                    value: item.done,
+                    title: Text(item.title),
+                    selected: item.done,
+                    onChanged: (bool selected) {
+                      _toggleItem(item);
+                    },
+                  );
+                }).toList();
+
+                return ListView(
+                  children: widgets,
+                  itemExtent: 50.0,
                 );
-              }).toList();
-
-              return Column(
-                children: <Widget>[
-                  Expanded(
-                    flex: 1,
-                    child: ListView(
-                      children: widgets,
-                      itemExtent: 50.0,
-                    ),
+              },
+            ),
+          ),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    'Watch storage',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
-                  TextField(
-                    controller: controller,
-                    decoration: InputDecoration(
-                      labelText: 'What to do?',
-                    ),
-                    onEditingComplete: () {
-                      _addItem(controller.value.text);
-                      controller.clear();
+                ),
+                Flexible(
+                  child: FutureBuilder(
+                    future: storage.ready,
+                    builder: (context, snapshot) {
+                      return StreamBuilder(
+                        stream: storage.watchItem('todos'),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) return Offstage();
+                          return ListView(
+                            children: (snapshot.data as List).map((item) {
+                              return new TodoItem(
+                                title: item['title'],
+                                done: item['done'],
+                              );
+                            }).map((item) {
+                              return CheckboxListTile(
+                                value: item.done,
+                                title: Text(item.title),
+                                selected: item.done,
+                                onChanged: null,
+                              );
+                            }).toList(),
+                          );
+                        },
+                      );
                     },
                   ),
-                ],
-              );
+                ),
+              ],
+            ),
+          ),
+          TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              labelText: 'What to do?',
+            ),
+            onEditingComplete: () {
+              _addItem(controller.value.text);
+              controller.clear();
             },
-          )),
+          ),
+        ],
+      ),
     );
+  }
+
+  @override
+  void dispose() {
+    LocalStorage.close();
+    super.dispose();
   }
 }

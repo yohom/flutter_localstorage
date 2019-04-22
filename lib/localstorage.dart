@@ -1,6 +1,7 @@
-import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:path_provider/path_provider.dart';
 
@@ -8,10 +9,15 @@ import 'package:path_provider/path_provider.dart';
 class LocalStorage {
   static final Map<String, LocalStorage> _cache = new Map();
 
+  static void close() {
+    for (final storage in _cache.values) storage._dataStreamController?.close();
+  }
+
   String _filename;
   File _file;
   String _path;
   Map<String, dynamic> _data;
+  StreamController<Map<String, dynamic>> _dataStreamController;
 
   /// [ValueNotifier] which notifies about errors during storage initialization
   ValueNotifier<Error> onError;
@@ -38,6 +44,13 @@ class LocalStorage {
   LocalStorage._internal(String key, [String path]) {
     _filename = key;
     _data = new Map();
+    _dataStreamController = new StreamController.broadcast(onListen: () {
+      try {
+        _dataStreamController.add(_data);
+      } catch (e, s) {
+        _dataStreamController.addError(e, s);
+      }
+    });
     _path = path;
     onError = new ValueNotifier(null);
 
@@ -88,6 +101,11 @@ class LocalStorage {
     return _data[key];
   }
 
+  /// Watch a value from storage by key
+  Stream watchItem(String key) {
+    return _dataStreamController.stream.map((data) => data[key]);
+  }
+
   /// Saves item by key to a storage. Value should be json encodable (`json.encode()` is called under the hood).
   Future<void> setItem(String key, value) async {
     _data[key] = value;
@@ -123,6 +141,9 @@ class LocalStorage {
     final serialized = json.encode(_data);
     try {
       await _file.writeAsString(serialized);
+      if (!_dataStreamController.isClosed && !_dataStreamController.isPaused) {
+        _dataStreamController.add(_data);
+      }
     } catch (e) {
       rethrow;
     }
